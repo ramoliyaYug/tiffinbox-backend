@@ -1,62 +1,74 @@
 const express = require("express")
-const mongoose = require("mongoose")
 const cors = require("cors")
+const mongoose = require("mongoose")
 const dotenv = require("dotenv")
-const path = require("path")
-
 
 dotenv.config()
 
-
-const authRoutes = require("./routes/auth")
-const examRoutes = require("./routes/exams")
-const monitoringRoutes = require("./routes/monitoring")
-
 const app = express()
-app.use(
-    cors({
-        origin: ["http://localhost:3000", "https://tiffinbox-frontend.vercel.app/"], 
-        credentials: true,
-    }),
-)
-
-app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`)
-    console.log("Request headers:", req.headers)
-    next()
-})
+const port = process.env.PORT || 5000
 
 app.use(express.json())
 
-mongoose
-    .connect(process.env.MONGODB_URI)
-    .then(() => console.log("MongoDB connected successfully"))
-    .catch((err) => {
-        console.error("MongoDB connection error:", err)
-        console.error("Connection string:", process.env.MONGODB_URI)
-        process.exit(1) 
-    })
+// Add CORS headers manually for preflight requests
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://tiffinbox-frontend.vercel.app",
+    "https://tiffinbox-frontend-git-main-ramoliyayug55-5861s-projects.vercel.app/", // Add your specific Vercel URL pattern
+  ]
 
+  const origin = req.headers.origin
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin)
+  }
 
-app.use("/api/auth", authRoutes)
-app.use("/api/exams", examRoutes)
-app.use("/api/monitoring", monitoringRoutes)
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+  res.setHeader("Access-Control-Allow-Credentials", "true")
 
-
-app.options("*", cors())
-
-if (process.env.NODE_ENV === "production") {
-    app.use(express.static(path.join(__dirname, "../frontend/build")))
-
-    app.get("*", (req, res) => {
-        res.sendFile(path.resolve(__dirname, "../frontend", "build", "index.html"))
-    })
-}
-
-app.use((err, req, res, next) => {
-    console.error("Server error:", err.stack)
-    res.status(500).json({ message: "Something went wrong!", error: err.message })
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200)
+  } else {
+    next()
+  }
 })
 
-const PORT = process.env.PORT || 5000
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://tiffinbox-frontend.vercel.app",
+        "https://tiffinbox-frontend-git-main-ramoliyayug55-5861s-projects.vercel.app/", // Add your specific Vercel URL pattern
+      ]
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true)
+      } else {
+        callback(new Error("Not allowed by CORS"))
+      }
+    },
+    credentials: true,
+  }),
+)
+
+const uri = process.env.ATLAS_URI
+mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
+const connection = mongoose.connection
+connection.once("open", () => {
+  console.log("MongoDB database connection established successfully")
+})
+
+const usersRouter = require("./routes/users")
+const tiffinRoutes = require("./routes/tiffin")
+const orderRoutes = require("./routes/order")
+
+app.use("/users", usersRouter)
+app.use("/tiffin", tiffinRoutes)
+app.use("/order", orderRoutes)
+
+app.listen(port, () => {
+  console.log(`Server is running on port: ${port}`)
+})
